@@ -1,27 +1,63 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
-
-import 'Blue.dart';
 
 void main() {
   runApp(const MyApp());
 }
 
-void rw(bool f, b, l, r) {
-  if (f & b) {
-    print(_MyApp()._address);
-    BlueDevice.instance.connect(_MyApp()._address, 's');
-  } else if (l & r) {
-    BlueDevice.instance.connect(_MyApp()._address, 'n');
-  } else if (f) {
-    BlueDevice.instance.connect(_MyApp()._address, 'f');
-  } else if (b) {
-    BlueDevice.instance.connect(_MyApp()._address, 'b');
-  } else if (l) {
-    BlueDevice.instance.connect(_MyApp()._address, 'l');
-  } else {
-    BlueDevice.instance.connect(_MyApp()._address, 'r');
+late BluetoothConnection connection;
+Future<void> connect(
+  BluetoothDevice device,
+  context,
+) async {
+  try {
+    connection = await BluetoothConnection.toAddress(device.address);
+    connection.input!.listen(
+      (event) {
+        print(ascii.decode(event));
+      },
+    );
+    print(connection.isConnected);
+  } catch (e) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('error in connect'),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await connect(device, context);
+              },
+              child: const Text('try again'),
+            )
+          ],
+        ),
+      ),
+    );
   }
+}
+
+void rw(bool f, b, l, r) {
+  String event;
+  if (f & b) {
+    event = 's';
+  } else if (l & r) {
+    event = 'n';
+  } else if (f) {
+    event = 'f';
+  } else if (b) {
+    event = 'b';
+  } else if (l) {
+    event = 'l';
+  } else {
+    event = 'r';
+  }
+  connection.output.add(ascii.encode(event));
 }
 
 class MyApp extends StatefulWidget {
@@ -74,9 +110,23 @@ class _MyApp extends State<MyApp> {
     bool f = false, b = false, l = false, r = false;
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        appBarTheme: const AppBarTheme(
+          foregroundColor: Colors.orange,
+        ),
+      ),
       home: Scaffold(
         appBar: AppBar(
           backgroundColor: Colors.black87,
+          // leading: IconButton(
+          //   onPressed: () {
+          //     Scaffold.of(context).openDrawer();
+          //   },
+          //   icon: Icon(
+          //     Icons.bluetooth,
+          //     color: Colors.orange,
+          //   ),
+          // ),
           title: const Center(
             child: Text(
               'Truck Platooning',
@@ -149,23 +199,8 @@ class _MyApp extends State<MyApp> {
                                   trailing: ElevatedButton(
                                     child: const Text('Connect'),
                                     onPressed: () async {
-                                      BluetoothConnection connection =
-                                          await BluetoothConnection.toAddress(
-                                              snapshot.data![index].address);
-                                      connection.input!.listen(
-                                        (event) {
-                                          print(1);
-                                          // print(ascii.decode(event));
-                                        },
-                                      );
-                                      // await FlutterBluetoothSerial.instance
-                                      //     .connect(BluetoothDevice(
-                                      //         address: snapshot
-                                      //             .data![index].address));
-                                      print(1);
-                                      print(await FlutterBluetoothSerial
-                                          .instance.isConnected);
-                                      // .connect()const BluetoothDevice(address: 'address'));
+                                      await connect(
+                                          snapshot.data![index], context);
                                     },
                                   ),
                                 );
@@ -183,13 +218,7 @@ class _MyApp extends State<MyApp> {
                       trailing: ElevatedButton(
                         child: const Text('Settings'),
                         onPressed: () {
-                          FlutterBluetoothSerial.instance.openSettings().then(
-                            (value) async {
-                              print('11111');
-                              await FlutterBluetoothSerial.instance
-                                  .connect(BluetoothDevice(address: 'address'));
-                            },
-                          );
+                          FlutterBluetoothSerial.instance.openSettings();
                         },
                       ),
                     ),
@@ -198,11 +227,6 @@ class _MyApp extends State<MyApp> {
               ),
             ),
           ),
-        ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: () async {
-            print(await FlutterBluetoothSerial.instance.isConnected);
-          },
         ),
         body: Container(
           color: Colors.black,
@@ -355,7 +379,7 @@ class BluetoothDeviceListEntry extends ListTile {
             children: <Widget>[
               rssi != null
                   ? Container(
-                      margin: EdgeInsets.all(8.0),
+                      margin: const EdgeInsets.all(8.0),
                       child: DefaultTextStyle(
                         style: const TextStyle(color: Colors.orange),
                         child: Column(
